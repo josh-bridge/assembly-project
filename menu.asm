@@ -16,6 +16,8 @@ menu:   		.ascii "\n"
 			.ascii "\n"
 			.ascii "Please enter menu option: "
 			.asciiz ""
+str.nl:			.asciiz "\n"
+str.cnl:		.asciiz ":\n"
 str.num1:		.asciiz "Enter Num1: "
 str.num2:		.asciiz "Enter Num2: "
 str.numprint1:		.asciiz "\nNumber 1 is: "
@@ -25,11 +27,12 @@ str.mulresult:		.asciiz "\nNum1 * Num2 ="
 str.divresult1:		.asciiz "\nNum1 ÷ Num2 ="
 str.divresult2:		.asciiz " Remainder: "
 str.swapnum:		.asciiz "\nSwapped Numbers!"
-str.betweennum:		.asciiz "\nNumbers between and including Num1 & Num2:\n"
-str.sumcount:		.asciiz "\nSum of numbers between and including Num1 & Num2:\n"
-str.primenum:		.asciiz "\nPrime numbers between Num1 & Num2:\n"
+str.betweennum:		.asciiz "\nNumbers between and including "
+str.sumcount:		.asciiz "\nSum of numbers between and including "
+str.primenum:		.asciiz "\nPrime numbers between and including "
 str.negnum:		.asciiz "\nAvoid negative numbers! :(\n"
 str.negnumreset:	.asciiz "\nPlease enter at least one positive number above 1!\n"
+str.intendloop:		.asciiz "\nResult was above int limit! :(\n"
 	
 .text
 printMenu: 
@@ -51,7 +54,7 @@ printMenu:
 	beq $s3,7,opt7							
 	beq $s3,8,opt8							
 	beq $s3,9,opt9							
-	#beq $s3,10,opt10						
+	beq $s3,10,opt10						
 	beq $s3,11,opt11						
 	beq $s3,12,quit							
 	#reset if invalid input						
@@ -80,7 +83,35 @@ printspace:
 	syscall 							#print ' '
 	#return to sender address					
 	jr $k0 								
-									
+	
+printstringend: # print num1 + " & " + num2 + ":\n"
+	#print Num1							
+	addi $v0, $zero, 1						#load service address 1 (int print $a0)
+	add $a0, $zero, $s0						#insert Num1 into $a0
+	syscall 							#print Num1
+	#print ' '							
+	addi $v0, $zero, 11						#load service address 11 (char print $a0)
+	addi $a0, $zero, ' '						#put char ' ' into $a0
+	syscall 							#print ' '								
+	#print '&'							
+	addi $v0, $zero, 11						#load service address 11 (char print $a0)
+	addi $a0, $zero, '&'						#put char '&' into $a0
+	syscall 							#print '&'
+	#print ' '							
+	addi $v0, $zero, 11						#load service address 11 (char print $a0)
+	addi $a0, $zero, ' '						#put char ' ' into $a0
+	syscall 							#print ' '
+	#print Num2							
+	addi $v0, $zero, 1						#load service address 1 (int print $a0)
+	add $a0, $zero, $s1						#insert Num2 into $a0
+	syscall 							#print Num2
+	#print ":\n"		
+	addi $v0, $zero, 4						#load service address 4 (string print address $a0)
+	la $a0, str.cnl							#load string address (colon-new-line)
+	syscall								#print ":\n"
+	#return to sender address					
+	jr $k0 						
+	
 opt1: #Enter Num1							
 	#print "Enter Num2: "						
 	addi $v0, $zero, 4						#load service address 4 (string print address $a0)
@@ -183,10 +214,13 @@ opt7: #Swap Num1 & Num2 and display
 opt8: #Display Numbers between and including num 1 and num 2		
 	#make tempNum1($t0) value					
 	add $t0, $0, $s0 						#store num1 in seperate editable value tempNum1($t0) 
-	#print "Numbers between and including Num1 & Num2:"		
+	#print "Numbers between and including "		
 	addi $v0, $zero, 4						#load service address 4 (string print address $a0)
 	la $a0, str.betweennum						#load string address
 	syscall								#print pre-betweennum string "Numbers between and including Num1 & Num2:"
+	#print num1 + " & " + num2 + ":\n"					
+	la $k1, printstringend						#print string end (load printstringend address)
+	jalr $k0, $k1 							#print space (jump to printstringend then return)
 	#find count direction						
 	opt8.1: 							#if Num1 > Num2	
 		bgt $t0, $s1, opt8.3 						#if Num1 > Num2 jump to countDown (>opt8.3)
@@ -243,6 +277,9 @@ opt9: #Sum numbers between num1 and num2
 	addi $v0, $zero, 4						#load service address 4 (string print address $a0)
 	la $a0, str.sumcount						#load string address
 	syscall								#print pre-sumcount string "Sum of numbers between and including Num1 & Num2:"
+	#print num1 + " & " + num2 + ":\n"					
+	la $k1, printstringend						#print string end (load printstringend address)
+	jalr $k0, $k1 							#print space (jump to printstringend then return)
 	#enter opt8 loop with sumFlag($t2)=1				
 	j opt8.1							
 									
@@ -288,10 +325,74 @@ opt9: #Sum numbers between num1 and num2
 		j printMenu						
 									
 opt10: #Raise num 1 to the power of num2				
-			#loop with counter				
-			#tempnum1 *= num1				
-			#loop until counter = num2			
-									
+
+	add $t0, $0, $s0 						#store num1 in seperate editable value tempNum1($t0)
+	add $t2, $0, $s1 						#store num2 in seperate editable value tempNum2($t2)
+	addi $t4, $0, 1							#Create LoopCount($t4) and start from 1
+	
+	#print Num1 + '^' + Num2 + ' = ' (e.g. 10^2 = ANS)
+	opt10.0.1:
+		#print Num1							
+		addi $v0, $zero, 1						#load service address 1 (int print $a0)
+		add $a0, $zero, $s0						#insert Num1 into $a0
+		syscall 							#print Num1
+		#print '^'							
+		addi $v0, $zero, 11						#load service address 11 (char print $a0)
+		addi $a0, $zero, '^'						#put char '^' into $a0
+		syscall 							#print '^'								
+		#print Num2							
+		addi $v0, $zero, 1						#load service address 1 (int print $a0)
+		add $a0, $zero, $s1						#insert Num2 into $a0
+		syscall 							#print Num2
+		#print ' '						
+		la $k1, printspace 						#print space (load printspace address)
+		jalr $k0, $k1 							#print space (jump to printspace then return)
+		#print '='							
+		addi $v0, $zero, 11						#load service address 11 (char print $a0)
+		addi $a0, $zero, '='						#put char '=' into $a0
+		syscall 							#print '='	
+		#print ' '						
+		la $k1, printspace 						#print space (load printspace address)
+		jalr $k0, $k1 							#print space (jump to printspace then return)						
+		
+	opt10.1: #error handling (power of 0 or -x or 0.x etc)
+	
+	
+	#loop until loopCount($t4) == num2($s1)
+	opt10.2:
+		#if end of loop, quit
+		beq $t4, $t2, opt10.3						#if end of loop (loopCount($t4) == num2($s1)) then jump to endLoop(>opt10.3)
+		#if tempNum1($t0) is 0 (if past int limit) then end
+		beqz $t0, opt10.4						#if int limit hit (tempNum1($t0) == 0) then jump to intEndLoop(>opt10.4)
+		#bring the power
+		mul $t0, $t0, $s0						#tempNum1($t0) * num1($s0)
+		#loopCount($t4)++				
+		addi $t4, $t4, 1				
+		#loop back (>opt10.2)	
+		j opt10.2	
+	
+	opt10.3:
+		#print the result
+		addi $v0, $zero, 1						#load service address 1 (int print $a0)
+		add $a0, $zero, $t0						#insert tempNum1 into $a0
+		syscall 							#print tempNum1
+		#print \n		
+		addi $v0, $zero, 4						#load service address 4 (string print address $a0)
+		la $a0, str.nl							#load string address (new-line)
+		syscall								#print \n	
+		#reset used variables
+		addi $t0, $0, 0 						#reset tempNum1($t0)
+		addi $t2, $0, 0 						#reset tempNum2($t2)
+		addi $t4, $0, 0 						#reset loopCount($t4)	
+		
+		j printMenu	
+		
+	opt10.4: #intEndloop
+		addi $v0, $zero, 4						#load service address 4 (string print address $a0)
+		la $a0, str.intendloop						#load string address
+		syscall	
+		j printMenu
+										
 opt11: #Display prime numbers between num1 and num2			
 	#create temp values						
 	add $t0, $0, $s0 						#store num1 in seperate editable value tempNum1($t0)
@@ -320,6 +421,9 @@ opt11: #Display prime numbers between num1 and num2
 			addi $v0, $zero, 4						#load service address 4 (string print address $a0)
 			la $a0, str.primenum						#load string address
 			syscall								#print "Prime numbers between Num1 & Num2:"
+			#print num1 + " & " + num2 + ":\n"					
+			la $k1, printstringend						#print string end (load printstringend address)
+			jalr $k0, $k1 							#print space (jump to printstringend then return)
 			#start outerloop				
 			j opt11.3					
 									
